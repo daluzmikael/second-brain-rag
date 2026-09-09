@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Second Brain</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fbfaf8;
+    --panel: #ffffff;
+    --ink: #1b1a18;
+    --muted: #6d6a65;
+    --line: #e6e2dc;
+    --accent: #7c5cff;
+    --accent-soft: #efeaff;
+    --user-bg: #16151a;
+    --user-ink: #f7f6f4;
+    --code-bg: #f2f0ec;
+    --danger: #b4341f;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #131316;
+      --panel: #1b1b1f;
+      --ink: #ececed;
+      --muted: #9b9aa0;
+      --line: #2c2c32;
+      --accent: #a48bff;
+      --accent-soft: #272140;
+      --user-bg: #2e2b3d;
+      --user-ink: #f2f1f5;
+      --code-bg: #232329;
+      --danger: #ff8f7a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .brand { font-weight: 650; letter-spacing: -0.01em; margin-right: auto; display: flex; align-items: baseline; gap: 10px; }
+  .brand small { font-weight: 450; color: var(--muted); font-size: 12px; }
+  button {
+    font: inherit; font-size: 13px;
+    padding: 6px 12px; border-radius: 9px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+
+  .banner {
+    padding: 10px 20px; font-size: 13px;
+    background: var(--accent-soft); color: var(--ink);
+    border-bottom: 1px solid var(--line);
+  }
+  .banner.error { background: #fdecea; color: var(--danger); }
+  @media (prefers-color-scheme: dark) { .banner.error { background: #3a1d17; } }
+  .banner code { background: rgba(127,127,127,.18); padding: 1px 5px; border-radius: 4px; }
+
+  main { flex: 1; overflow-y: auto; }
+  .thread { max-width: 780px; margin: 0 auto; padding: 26px 20px 40px; }
+
+  .empty { color: var(--muted); text-align: center; padding: 56px 12px; }
+  .empty h1 { font-size: 21px; color: var(--ink); margin: 0 0 8px; letter-spacing: -0.02em; }
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 20px; }
+  .examples button { font-size: 13px; border-radius: 999px; padding: 7px 14px; color: var(--muted); }
+
+  .turn { margin-bottom: 26px; }
+  .turn.user { display: flex; justify-content: flex-end; }
+  .bubble {
+    background: var(--user-bg); color: var(--user-ink);
+    padding: 10px 15px; border-radius: var(--radius) var(--radius) 4px var(--radius);
+    max-width: 82%; white-space: pre-wrap; word-wrap: break-word;
+  }
+  .answer { min-width: 0; }
+  .answer > :first-child { margin-top: 0; }
+  .answer > :last-child { margin-bottom: 0; }
+
+  .meta { font-size: 12px; color: var(--muted); margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+  .chip {
+    font-size: 12px; text-decoration: none;
+    color: var(--muted); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 4px 11px; display: inline-flex; gap: 6px; align-items: center;
+    max-width: 100%;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip b { color: var(--accent); font-weight: 650; }
+  .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .dots span {
+    display: inline-block; width: 6px; height: 6px; margin-right: 3px;
+    background: var(--muted); border-radius: 50%; animation: blink 1.2s infinite;
+  }
+  .dots span:nth-child(2) { animation-delay: .2s; }
+  .dots span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
+
+  .err { color: var(--danger); font-size: 13.5px; white-space: pre-wrap; }
+
+  /* markdown */
+  .answer h1, .answer h2, .answer h3, .answer h4 { line-height: 1.3; margin: 20px 0 8px; letter-spacing: -0.01em; }
+  .answer h1 { font-size: 20px; } .answer h2 { font-size: 18px; }
+  .answer h3 { font-size: 16px; } .answer h4 { font-size: 15px; color: var(--muted); }
+  .answer p { margin: 0 0 12px; }
+  .answer ul, .answer ol { margin: 0 0 12px; padding-left: 22px; }
+  .answer li { margin: 3px 0; }
+  .answer blockquote { margin: 0 0 12px; padding-left: 12px; border-left: 3px solid var(--line); color: var(--muted); }
+  .answer hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
+  .answer code { background: var(--code-bg); padding: 1.5px 5px; border-radius: 5px; font-size: 13px;
+                 font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .answer pre { background: var(--code-bg); padding: 12px 14px; border-radius: 10px; overflow-x: auto; margin: 0 0 12px; }
+  .answer pre code { background: none; padding: 0; }
+  .answer a { color: var(--accent); }
+  .table-wrap { overflow-x: auto; margin: 0 0 14px; }
+  .answer table { border-collapse: collapse; font-size: 13.5px; width: 100%; }
+  .answer th, .answer td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+  .answer th { background: var(--code-bg); font-weight: 620; }
+  .cite {
+    font-size: 11px; font-weight: 650; color: var(--accent);
+    background: var(--accent-soft); border-radius: 5px;
+    padding: 0 5px; margin: 0 1px; vertical-align: baseline;
+  }
+  .wikilink { color: var(--accent); }
+
+  footer { border-top: 1px solid var(--line); background: var(--panel); }
+  .composer { max-width: 780px; margin: 0 auto; padding: 14px 20px 18px; display: flex; gap: 10px; align-items: flex-end; }
+  textarea {
+    flex: 1; resize: none; font: inherit;
+    padding: 11px 14px; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+    max-height: 200px; min-height: 44px;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  .send { background: var(--accent); color: #fff; border-color: var(--accent); padding: 11px 18px; border-radius: 12px; }
+  .send:hover:not(:disabled) { color: #fff; opacity: .9; }
+  .hint { max-width: 780px; margin: 0 auto; padding: 0 20px 12px; font-size: 11.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">Second Brain <small id="status">loading…</small></div>
+  <button id="reindex" title="Re-scan the vault for new and edited notes">Reindex</button>
+  <button id="reset" title="Clear this conversation">New chat</button>
+</header>
+
+<div id="banner" hidden></div>
+
+<main id="main">
+  <div class="thread" id="thread">
+    <div class="empty" id="empty">
+      <h1>Ask your vault</h1>
+      <div>Answers come only from your notes, with the source note cited.</div>
+      <div class="examples" id="examples"></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="composer">
+    <textarea id="input" rows="1" placeholder="Ask about your notes…" autofocus></textarea>
+    <button class="send" id="send">Send</button>
+  </div>
+  <div class="hint">Enter to send · Shift+Enter for a new line · this chat is not saved anywhere</div>
+</footer>
+
+<script>
+"use strict";
+
+const state = { messages: [], busy: false };
+
+const el = {
+  thread: document.getElementById("thread"),
+  empty: document.getElementById("empty"),
+  input: document.getElementById("input"),
+  send: document.getElementById("send"),
+  reset: document.getElementById("reset"),
+  reindex: document.getElementById("reindex"),
+  status: document.getElementById("status"),
+  banner: document.getElementById("banner"),
+  main: document.getElementById("main"),
+  examples: document.getElementById("examples"),
+};
+
+const EXAMPLES = [
+  "What do I have for the seasonal structure of my volleyball league?",
+  "What games do I want to make?",
+  "What did I write about Japan?",
+];
+
+/* ---------------------------------------------------------------- markdown */
+function escapeHtml(text) {
+  return text.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+}
+
+function inline(text) {
+  let out = escapeHtml(text);
+  const codes = [];
+  out = out.replace(/`([^`]+)`/g, (_m, code) => {
+    codes.push(code);
+    return "\u0000" + (codes.length - 1) + "\u0000";
+  });
+  out = out.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, target, alias) =>
+    '<span class="wikilink">' + (alias || target) + "</span>");
+  out = out.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  out = out.replace(/(^|[\s(])\[(\d{1,2})\]/g, '$1<sup class="cite">$2</sup>');
+  out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  out = out.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+  out = out.replace(/(^|[\s(])_([^_\n]+)_/g, "$1<em>$2</em>");
+  out = out.replace(/~~([^~]+)~~/g, "<del>$1</del>");
+  out = out.replace(/\u0000(\d+)\u0000/g, (_m, i) => "<code>" + escapeHtml(codes[+i]) + "</code>");
+  return out;
+}
+
+function splitRow(line) {
+  return line.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim());
+}
+
+function renderMarkdown(src) {
+  const lines = String(src || "").replace(/\r\n?/g, "\n").split("\n");
+  const html = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (/^\s*```/.test(line)) {
+      const body = [];
+      i++;
+      while (i < lines.length && !/^\s*```/.test(lines[i])) body.push(lines[i++]);
+      i++;
+      html.push("<pre><code>" + escapeHtml(body.join("\n")) + "</code></pre>");
+      continue;
+    }
+
+    if (!line.trim()) { i++; continue; }
+
+    // table: a pipe row followed by a separator row
+    if (/^\s*\|/.test(line) && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1])) {
+      const head = splitRow(line);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(splitRow(lines[i++]));
+      let table = "<div class='table-wrap'><table><thead><tr>";
+      head.forEach((c) => { table += "<th>" + inline(c) + "</th>"; });
+      table += "</tr></thead><tbody>";
+      rows.forEach((r) => {
+        table += "<tr>";
+        for (let c = 0; c < head.length; c++) table += "<td>" + inline(r[c] || "") + "</td>";
+        table += "</tr>";
+      });
+      html.push(table + "</tbody></table></div>");
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      const level = Math.min(heading[1].length, 4);
+      html.push("<h" + level + ">" + inline(heading[2]) + "</h" + level + ">");
+      i++;
+      continue;
+    }
+
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { html.push("<hr>"); i++; continue; }
+
+    if (/^\s*>/.test(line)) {
+      const body = [];
+      while (i < lines.length && /^\s*>/.test(lines[i])) body.push(lines[i++].replace(/^\s*>\s?/, ""));
+      html.push("<blockquote>" + renderMarkdown(body.join("\n")) + "</blockquote>");
+      continue;
+    }
+
+    const bullet = /^\s*[-*+]\s+/;
+    const numbered = /^\s*\d+[.)]\s+/;
+    if (bullet.test(line) || numbered.test(line)) {
+      const ordered = !bullet.test(line);
+      const marker = ordered ? numbered : bullet;
+      const items = [];
+      while (i < lines.length && marker.test(lines[i])) {
+        let item = lines[i++].replace(marker, "");
+        while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !marker.test(lines[i])) {
+          item += " " + lines[i++].trim();
+        }
+        items.push("<li>" + inline(item) + "</li>");
+      }
+      html.push((ordered ? "<ol>" : "<ul>") + items.join("") + (ordered ? "</ol>" : "</ul>"));
+      continue;
+    }
+
+    const para = [];
+    while (i < lines.length && lines[i].trim() && !/^\s*(#{1,6}\s|[-*+]\s|\d+[.)]\s|>|\||```)/.test(lines[i])) {
+      para.push(lines[i++]);
+    }
+    if (para.length) html.push("<p>" + inline(para.join("\n")).replace(/\n/g, "<br>") + "</p>");
+    else i++;
+  }
+  return html.join("");
+}
+
+/* ------------------------------------------------------------------- view */
+function scrollDown() {
+  el.main.scrollTop = el.main.scrollHeight;
+}
+
+function addUserTurn(text) {
+  const div = document.createElement("div");
+  div.className = "turn user";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.textContent = text;
+  div.appendChild(bubble);
+  el.thread.appendChild(div);
+  scrollDown();
+}
+
+function addAnswerTurn() {
+  const turn = document.createElement("div");
+  turn.className = "turn";
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.innerHTML = '<span class="dots"><span></span><span></span><span></span></span>';
+  const answer = document.createElement("div");
+  answer.className = "answer";
+  const chips = document.createElement("div");
+  chips.className = "chips";
+  chips.hidden = true;
+  turn.append(meta, answer, chips);
+  el.thread.appendChild(turn);
+  scrollDown();
+  return { turn, meta, answer, chips };
+}
+
+function renderChips(container, sources) {
+  container.innerHTML = "";
+  if (!sources || !sources.length) { container.hidden = true; return; }
+  sources.forEach((s) => {
+    const a = document.createElement("a");
+    a.className = "chip";
+    a.href = s.url;
+    a.title = s.rel_path + (s.truncated ? " (excerpt)" : "");
+    a.innerHTML = "<b>" + s.n + "</b><span></span>";
+    a.querySelector("span").textContent = s.title + (s.folder ? " · " + s.folder : "");
+    container.appendChild(a);
+  });
+  container.hidden = false;
+}
+
+function setBusy(busy) {
+  state.busy = busy;
+  el.send.disabled = busy;
+  el.input.disabled = busy;
+  el.reindex.disabled = busy;
+}
+
+/* -------------------------------------------------------------------- net */
+async function send(question) {
+  if (!question.trim() || state.busy) return;
+  el.empty.hidden = true;
+  setBusy(true);
+
+  addUserTurn(question);
+  const history = state.messages.slice();
+  state.messages.push({ role: "user", content: question });
+
+  const view = addAnswerTurn();
+  let answerText = "";
+  let failed = false;
+
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, history }),
+    });
+    if (!response.ok || !response.body) {
+      throw new Error("Server returned " + response.status);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let split;
+      while ((split = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, split);
+        buffer = buffer.slice(split + 2);
+
+        let event = "message";
+        const dataLines = [];
+        frame.split("\n").forEach((line) => {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+        });
+        if (!dataLines.length) continue;
+
+        let payload;
+        try { payload = JSON.parse(dataLines.join("\n")); } catch { continue; }
+
+        if (event === "sources") {
+          renderChips(view.chips, payload.sources);
+          view.meta.textContent = payload.rewritten
+            ? "searched: " + payload.search_query
+            : "";
+          if (!payload.sources.length) view.meta.textContent = "no matching notes";
+        } else if (event === "delta") {
+          answerText += payload.text;
+          view.answer.innerHTML = renderMarkdown(answerText);
+          scrollDown();
+        } else if (event === "error") {
+          failed = true;
+          view.answer.innerHTML = '<div class="err"></div>';
+          view.answer.querySelector(".err").textContent = payload.message;
+        }
+      }
+    }
+  } catch (error) {
+    failed = true;
+    view.answer.innerHTML = '<div class="err"></div>';
+    view.answer.querySelector(".err").textContent = String(error.message || error);
+  }
+
+  if (view.meta.querySelector(".dots")) view.meta.textContent = "";
+  if (!failed && answerText) {
+    state.messages.push({ role: "assistant", content: answerText });
+  } else {
+    state.messages.pop();
+  }
+  setBusy(false);
+  el.input.focus();
+}
+
+async function loadStatus() {
+  try {
+    const info = await (await fetch("/api/status")).json();
+    el.status.textContent = info.indexed
+      ? info.notes + " notes · " + info.chunks + " chunks · " + info.chat_model
+      : "no index yet";
+
+    const problems = [];
+    if (!info.vault_exists) problems.push("Vault not found at <code>" + info.vault_path_config + "</code>. Set <code>VAULT_PATH</code> in <code>.env</code>.");
+    if (!info.api_key_configured) problems.push("No API key yet. Add <code>OPENAI_API_KEY</code> to <code>.env</code>, then restart.");
+    else if (!info.indexed) problems.push("Vault not indexed yet. Run <code>./brain index</code> or press Reindex.");
+    else if (info.fake_embeddings) problems.push("Index was built with <code>FAKE_EMBEDDINGS</code> (offline test mode). Rebuild with <code>./brain index --rebuild</code> for real semantic search.");
+
+    if (problems.length) {
+      el.banner.className = info.api_key_configured ? "banner" : "banner error";
+      el.banner.innerHTML = problems.join("<br>");
+      el.banner.hidden = false;
+    } else {
+      el.banner.hidden = true;
+    }
+  } catch {
+    el.status.textContent = "server unreachable";
+  }
+}
+
+/* ------------------------------------------------------------------ wiring */
+EXAMPLES.forEach((text) => {
+  const button = document.createElement("button");
+  button.textContent = text;
+  button.onclick = () => { el.input.value = ""; autosize(); send(text); };
+  el.examples.appendChild(button);
+});
+
+el.send.onclick = () => { const q = el.input.value; el.input.value = ""; autosize(); send(q); };
+
+el.input.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    el.send.click();
+  }
+});
+
+function autosize() {
+  // An empty box gets a fixed height: reading scrollHeight before the first
+  // layout settles can otherwise leave the composer stuck at its max height.
+  el.input.style.height = "auto";
+  el.input.style.height = (el.input.value ? Math.min(el.input.scrollHeight, 200) : 44) + "px";
+}
+el.input.addEventListener("input", autosize);
+
+el.reset.onclick = () => {
+  state.messages = [];
+  el.thread.querySelectorAll(".turn").forEach((n) => n.remove());
+  el.empty.hidden = false;
+  el.input.focus();
+};
+
+el.reindex.onclick = async () => {
+  const label = el.reindex.textContent;
+  el.reindex.textContent = "Indexing…";
+  el.reindex.disabled = true;
+  try {
+    const response = await fetch("/api/reindex", { method: "POST" });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "reindex failed");
+    el.status.textContent = data.notes + " notes · " + data.chunks + " chunks · " + (data.chat_model || "");
+  } catch (error) {
+    el.banner.className = "banner error";
+    el.banner.textContent = String(error.message || error);
+    el.banner.hidden = false;
+  }
+  el.reindex.textContent = label;
+  el.reindex.disabled = false;
+  loadStatus();
+};
+
+loadStatus();
+autosize();
+</script>
+</body>
+</html>

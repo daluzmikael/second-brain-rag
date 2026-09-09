@@ -1,8 +1,10 @@
 openai>=1.40.0
-psycopg[binary]>=3.1.18
-pgvector>=0.3.0
+# Local static embeddings: pure numpy + tokenizers, no PyTorch.
+model2vec>=0.9.0
+numpy>=1.26.0
 python-dotenv>=1.0.1
 tiktoken>=0.7.0
+PyYAML>=6.0
 fastapi>=0.112.0
 uvicorn[standard]>=0.30.0
 pydantic>=2.8.0

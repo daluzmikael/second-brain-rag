@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Boot the second brain. Creates the venv and installs deps on first run.
+#
+#   ./brain index            build or refresh the index from your vault
+#   ./brain serve            open the web chat UI
+#   ./brain chat             chat in the terminal
+#   ./brain ask "question"   one-shot question
+#   ./brain search "terms"   retrieval only, no model call
+#   ./brain status           vault / index / model info
+
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$here"
+
+venv="$here/.venv"
+python_bin="$venv/bin/python"
+
+if [ ! -x "$python_bin" ]; then
+  echo "Creating virtualenv at $venv ..."
+  python3 -m venv "$venv"
+  "$venv/bin/pip" install --quiet --upgrade pip
+  echo "Installing dependencies ..."
+  "$venv/bin/pip" install --quiet -r "$here/requirements.txt"
+fi
+
+if [ ! -f "$here/.env" ]; then
+  echo "No .env found; copying .env.example -> .env"
+  cp "$here/.env.example" "$here/.env"
+  echo "Add your OPENAI_API_KEY to $here/.env, then run this again."
+  exit 1
+fi
+
+exec "$python_bin" -m app.cli "$@"
