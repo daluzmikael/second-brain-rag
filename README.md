@@ -16,10 +16,19 @@ open ~/Applications/SecondBrain.app     # menu bar icon; Option+Space to ask
 
    ```
    OPENAI_API_KEY=sk-...
-   VAULT_PATH=~/Documents/MiksVaultyBaulty
+   VAULT_PATH="~/Library/Mobile Documents/iCloud~md~obsidian/Documents/MiksVaultyBaulty"
    ```
 
    Only answer generation uses the key. Indexing and search are local.
+
+   An iCloud-synced Obsidian vault lives under
+   `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/<vault>`. Quote the
+   path — it contains spaces. A vault kept anywhere else works just as well;
+   point `VAULT_PATH` at the folder holding your notes.
+
+   Moving the vault later costs nothing: the index keys on each note's relative
+   path and content hash, not its absolute location, so a move re-indexes only
+   the notes that genuinely changed.
 
 2. Build the index:
 
@@ -63,7 +72,7 @@ quitting discards it.
 | --- | --- |
 | `./brain index` | Index new and edited notes. Unchanged notes are never opened. |
 | `./brain index --rebuild` | Throw the index away and start over. |
-| `./brain chat` | Terminal chat. `/new` `/sources` `/status` `/reindex` `/exit`. |
+| `./brain chat` | Terminal chat. `/new` `/sources` `/status` `/reindex` `/help` `/exit`. |
 | `./brain ask "question"` | One question, one answer. |
 | `./brain search "terms"` | Retrieval only, no model call. Shows which signal matched. |
 | `./brain serve` | The web UI, in a browser. |
@@ -72,12 +81,12 @@ quitting discards it.
 
 ## Speed
 
-Measured on this vault (168 notes, ~54k tokens):
+Measured on this vault (170 notes, 439 chunks, ~54k tokens):
 
 | | |
 | --- | --- |
 | Vector search over the whole vault | **18 µs** |
-| Full retrieval (embed + keyword + fusion + assembly) | **26–270 ms** |
+| Full retrieval (embed + keyword + fusion + assembly) | **23–280 ms** |
 | Embedding one query, locally | 0.1 ms |
 | Embedding one query, via OpenAI | ~800 ms |
 | Indexing the entire vault, locally | ~2.5 s |
