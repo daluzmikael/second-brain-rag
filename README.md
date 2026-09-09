@@ -16,15 +16,15 @@ open ~/Applications/SecondBrain.app     # menu bar icon; Option+Space to ask
 
    ```
    OPENAI_API_KEY=sk-...
-   VAULT_PATH="~/Library/Mobile Documents/iCloud~md~obsidian/Documents/MiksVaultyBaulty"
+   VAULT_PATH=~/Notes/MyVault
    ```
 
    Only answer generation uses the key. Indexing and search are local.
 
    An iCloud-synced Obsidian vault lives under
-   `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/<vault>`. Quote the
-   path — it contains spaces. A vault kept anywhere else works just as well;
-   point `VAULT_PATH` at the folder holding your notes.
+   `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/<vault>`; quote the
+   path, since it contains spaces. Any other folder of markdown files works just
+   as well — point `VAULT_PATH` at the directory holding your notes.
 
    Moving the vault later costs nothing: the index keys on each note's relative
    path and content hash, not its absolute location, so a move re-indexes only
@@ -43,11 +43,11 @@ open ~/Applications/SecondBrain.app     # menu bar icon; Option+Space to ask
    open ~/Applications/SecondBrain.app
    ```
 
-   macOS will ask once for access to your Documents folder. To have it there
-   every day: System Settings › General › Login Items › **+** › SecondBrain.
+   macOS asks once for access to the folder your notes live in. To have the app
+   there every day: System Settings › General › Login Items › **+** › SecondBrain.
 
 The app starts the Python server itself and shuts it down when you quit. It also
-re-scans your vault every 30 seconds, so notes you edit in Obsidian become
+re-scans the vault every 30 seconds, so notes you edit in Obsidian become
 answerable without you running anything.
 
 Prefer a terminal? `./brain chat`, or `./brain serve` for the same UI in a
@@ -81,7 +81,7 @@ quitting discards it.
 
 ## Speed
 
-Measured on this vault (170 notes, 439 chunks, ~54k tokens):
+Measured on a vault of a few hundred short notes (~50k tokens total):
 
 | | |
 | --- | --- |
@@ -93,52 +93,57 @@ Measured on this vault (170 notes, 439 chunks, ~54k tokens):
 | First token of an answer | 0.7–3 s |
 
 Retrieval is not the bottleneck and cannot meaningfully be made faster; what
-remains is OpenAI generating the answer. Two things keep it that way:
+remains is the model generating the answer. Two things keep it that way:
 
 **Embeddings run locally.** A static [model2vec](https://github.com/MinishLab/model2vec)
-model (`potion-retrieval-32M`, ~30 MB, no PyTorch) replaced the OpenAI embedding
-call. On a 22-query benchmark against this vault the two were *tied* at 21/21
-top-1 — the hosted model's extra nuance is swamped by the keyword and title
-signals — while the local one is ~85× faster, free, and works offline. Set
-`EMBEDDING_BACKEND=openai` in `.env` to switch back.
+model (`potion-retrieval-32M`, ~30 MB, no PyTorch) replaces the OpenAI embedding
+call. On a 22-query benchmark over a real vault the two were *tied* on top-1
+accuracy — at this scale the hosted model's extra nuance is swamped by the
+keyword and title signals below — while the local one is ~85× faster, free, and
+works offline. Set `EMBEDDING_BACKEND=openai` in `.env` to switch back.
 
-**The server stays warm.** Python's import cost is ~10s on a cold start, against
-milliseconds for the search itself, so the process is kept resident rather than
-paying that per question.
+**The server stays warm.** Python's import cost is several seconds on a cold
+start, against milliseconds for the search itself, so the process is kept
+resident rather than paying that on every question.
 
 ## How retrieval works
 
-Notes in this vault are short, and many name their subject only in the filename:
-`Japan.md` contains the words "Tokyo" and "Dotonbori" and nothing else. Retrieval
-is built around that.
+Personal vaults are not article collections. Notes are short and uneven, many are
+stubs, structure carries meaning, and a note's subject often appears only in its
+filename — a note named for a city may hold nothing but a bulleted list of
+places, never repeating the city's name. Generic RAG defaults handle this badly.
+Five things address it:
 
 **Chunking follows the document structure.** Notes are split on markdown headings
-rather than by a fixed token window, so a `###` section and the table under it
-stay together. Tables are never cut across rows unless a single table exceeds the
-budget, and then the header row is repeated in each piece. Obsidian's cell padding
-is stripped first — some tables here had 3000-character rows that were almost
-entirely spaces.
+rather than by a fixed token window, so a section and the table under it stay
+together. Tables are never cut across rows unless a single table exceeds the
+budget, and then the header row is repeated in each piece. Obsidian's cell
+padding is stripped first: it aligns pipes in the editor, which can leave table
+rows thousands of characters wide and almost entirely whitespace, crowding out
+real content in both the chunk budget and the embedding.
 
-**Every chunk is embedded with its context.** A bare table of months means nothing
-on its own, so each chunk is embedded with a header naming its note, folder,
-heading path and tags. That is what makes "seasonal structure for my volleyball
-league" match a table whose cells never say "volleyball".
+**Every chunk is embedded with its context.** A bare table of months means
+nothing on its own, so each chunk is embedded behind a header naming its note,
+folder, heading path and tags. That is what lets a question about a topic match a
+table whose cells never mention it.
 
 **Three signals are fused.** Semantic search, keyword search (SQLite FTS5 with
-BM25 and porter stemming, which catches exact terms like `NAVC`), and a
-title/folder/tag match. Rankings are combined with Reciprocal Rank Fusion, and
-the title signal is applied once per *note* rather than once per chunk, so a long
-note cannot win by accumulating many weak matches.
+BM25 and porter stemming, which catches acronyms and proper nouns that embeddings
+blur), and a title/folder/tag match. Rankings are combined with Reciprocal Rank
+Fusion, which needs no score calibration between the two very different scales.
+The title signal is applied once per *note* rather than once per chunk, so a long
+note cannot win simply by accumulating many weak matches, and notes whose title
+matches but whose body never mentions the subject are still candidates.
 
-**Context is assembled per note, not per chunk.** The median note is a couple of
-hundred tokens, so whole notes are handed to the model wherever they fit within
-the budget. Longer notes fall back to their matching sections. The model never
-sees half a table.
+**Context is assembled per note, not per chunk.** When the median note is a
+couple of hundred tokens, whole notes fit in the budget and are handed over
+intact; longer ones fall back to just their matching sections. The model never
+sees half a table or misses the one line just outside a chunk window.
 
 **Placeholder notes answer honestly.** A note that is empty, or that contains
-only a heading (`# Iceland`), is indexed as such — so "what did I write about
-Iceland?" reports that the note exists and is blank, instead of reciting the
-heading back.
+only a heading, is indexed as such — so asking about it reports that the note
+exists and is blank, rather than reciting its title back as though it were
+content.
 
 ## A note on launchd and macOS permissions
 
@@ -180,11 +185,14 @@ data/index.sqlite3    the index (gitignored, rebuildable)
 
 - **No chat history is stored.** The browser holds the current conversation and
   sends it with each request.
-- **Follow-ups are resolved before searching.** "What about the awards?" is
-  rewritten into a standalone query using the conversation, then searched.
+- **Follow-ups are resolved before searching.** A question like "what about the
+  awards?" is rewritten into a standalone query using the conversation, then
+  searched.
 - **Citations are clickable.** Source chips open the note in Obsidian.
+- **Note content is treated as data.** The prompt instructs the model to use the
+  notes as reference material only, never as instructions addressed to it.
 - **Retrieval can be tested without any model.** `FAKE_EMBEDDINGS=1 ./brain index`
-  uses deterministic local hashes, so the pipeline works with no key and no
+  uses deterministic local hashes, so the whole pipeline runs with no key and no
   network. Rebuild afterwards.
 
 Tuning knobs (chunk size, context budget, signal weights, score floor, watcher
