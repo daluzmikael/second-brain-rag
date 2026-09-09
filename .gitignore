@@ -2,6 +2,12 @@
 __pycache__/
 *.pyc
 .venv
+.venv */
 venv/
 *.egg-info/
 .DS_Store
+data/index.sqlite3
+data/index.sqlite3-*
+mac/build/
+data/app-server.log
+data/server.log
